@@ -31,6 +31,12 @@ const OUTCOME_STYLE: Record<string, { bg: string; color: string; border: string 
   no_show: { bg: "rgba(239,68,68,0.1)", color: "#fca5a5", border: "rgba(239,68,68,0.25)" },
 };
 
+const INVITE_STATUS_STYLE: Record<string, { bg: string; color: string; border: string }> = {
+  pending: { bg: "rgba(245,158,11,0.1)", color: "#fcd34d", border: "rgba(245,158,11,0.25)" },
+  accepted: { bg: "rgba(16,185,129,0.1)", color: "#6ee7b7", border: "rgba(16,185,129,0.25)" },
+  declined: { bg: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.5)", border: "rgba(255,255,255,0.12)" },
+};
+
 const OUTCOME_LABEL: Record<Outcome, string> = {
   scheduled: "reset them to scheduled",
   won: "mark them as the winner",
@@ -187,7 +193,13 @@ export default function BattleModal({
 
               <div>
                 {group.map((a) => {
-                  const style = OUTCOME_STYLE[a.outcome ?? "scheduled"];
+                  // Before there's a result, the invite response
+                  // (pending/accepted/declined) is the more useful
+                  // at-a-glance signal than "scheduled".
+                  const showOutcome = (a.outcome ?? "scheduled") !== "scheduled";
+                  const style = showOutcome
+                    ? OUTCOME_STYLE[a.outcome ?? "scheduled"]
+                    : INVITE_STATUS_STYLE[a.inviteStatus ?? "pending"];
                   return (
                     <button
                       key={a.id}
@@ -219,7 +231,7 @@ export default function BattleModal({
                         <p style={{ fontSize: "12.5px", color: "rgba(255,255,255,0.35)" }}>@{a.registrantHandle}</p>
                       </div>
                       <span style={{ fontSize: "10.5px", fontWeight: 700, textTransform: "uppercase", padding: "0.3rem 0.6rem", borderRadius: "9999px", background: style.bg, color: style.color, border: `1px solid ${style.border}`, flexShrink: 0 }}>
-                        {(a.outcome ?? "scheduled").replace("_", " ")}
+                        {showOutcome ? (a.outcome ?? "scheduled").replace("_", " ") : (a.inviteStatus ?? "pending").replace("_", " ")}
                       </span>
                     </button>
                   );
@@ -243,7 +255,7 @@ export default function BattleModal({
                 </div>
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "1.25rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "1.25rem", flexWrap: "wrap" }}>
                 <span style={{ fontSize: "11.5px", fontWeight: 700, color: "rgba(255,255,255,0.4)", textTransform: "uppercase" }}>Status</span>
                 {(() => {
                   const s = OUTCOME_STYLE[selected.outcome ?? "scheduled"];
@@ -251,6 +263,14 @@ export default function BattleModal({
                     <span style={{ fontSize: "10.5px", fontWeight: 700, textTransform: "uppercase", padding: "0.3rem 0.6rem", borderRadius: "9999px", background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
                       {(selected.outcome ?? "scheduled").replace("_", " ")}
                       {selected.winnerRank ? ` #${selected.winnerRank}` : ""}
+                    </span>
+                  );
+                })()}
+                {(() => {
+                  const s = INVITE_STATUS_STYLE[selected.inviteStatus ?? "pending"];
+                  return (
+                    <span style={{ fontSize: "10.5px", fontWeight: 700, textTransform: "uppercase", padding: "0.3rem 0.6rem", borderRadius: "9999px", background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
+                      Invite: {(selected.inviteStatus ?? "pending").replace("_", " ")}
                     </span>
                   );
                 })()}

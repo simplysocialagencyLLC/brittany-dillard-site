@@ -8,6 +8,7 @@ export interface AdminAssignment {
   battleDate: string;
   assignedTime: string | null;
   outcome: string | null;
+  inviteStatus: string | null;
   winnerRank: number | null;
   registrantName: string | null;
   registrantHandle: string | null;
