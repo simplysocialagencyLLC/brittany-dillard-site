@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import Image from "next/image";
 import { useBattleModal } from "./BattleModalProvider";
 
@@ -25,6 +26,20 @@ function downloadBattleImage(img: string, title: string) {
 export default function UpcomingBattles({ battles }: { battles: Battle[] }) {
   const { openModal } = useBattleModal();
   const withFlyers = battles.filter((b) => b.flyerUrl);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Same pattern as King Kaly's own "Upcoming Box Battles" section: date
+  // pills don't hold refs of their own — they look up the matching card by
+  // its data-id and scrollIntoView it, relying on the container's
+  // scroll-snap CSS (already present in globals.css) to settle it in view.
+  const uniqueDates = Array.from(new Set(withFlyers.map((b) => b.battleDate)));
+
+  const scrollToBattle = (id: string) => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const card = container.querySelector(`[data-id="${id}"]`);
+    card?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  };
 
   return (
     <section className="section-dark" id="archives" style={{ background: "#050505", paddingBottom: "12rem" }}>
@@ -51,17 +66,24 @@ export default function UpcomingBattles({ battles }: { battles: Battle[] }) {
         ) : (
           <>
             <div className="flex gap-3 scroll-hide mb-8" style={{ overflowX: "auto", paddingBottom: "0.5rem" }}>
-              {withFlyers.map((b) => (
-                <div className="date-pill" key={`${b.battleType}-${b.battleDate}`}>
-                  <span className="day-text">{b.day}</span>
-                  <span className="month-text">{b.date.split(" ")[0]}</span>
-                </div>
-              ))}
+              {uniqueDates.map((battleDate) => {
+                const first = withFlyers.find((b) => b.battleDate === battleDate)!;
+                return (
+                  <div
+                    className="date-pill"
+                    key={battleDate}
+                    onClick={() => scrollToBattle(`${first.battleType}-${first.battleDate}`)}
+                  >
+                    <span className="day-text">{first.day}</span>
+                    <span className="month-text">{first.date.split(" ")[0]}</span>
+                  </div>
+                );
+              })}
             </div>
 
-            <div className="cards-scroll scroll-hide" style={{ gap: "2rem" }}>
+            <div className="cards-scroll scroll-hide" style={{ gap: "2rem" }} ref={scrollRef}>
               {withFlyers.map((b) => (
-                <div className="card-battle" key={`${b.battleType}-${b.battleDate}`}>
+                <div className="card-battle" key={`${b.battleType}-${b.battleDate}`} data-id={`${b.battleType}-${b.battleDate}`}>
                   <div className="card-img" style={{ position: "relative" }}>
                     <Image src={b.flyerUrl!} alt={b.battleType} fill style={{ objectFit: "cover", borderRadius: "inherit", display: "block" }} />
                   </div>
