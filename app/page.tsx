@@ -1,4 +1,5 @@
 import Header from "@/components/Header";
+
 import BattleModalProvider from "@/components/BattleModalProvider";
 import Hero from "@/components/Hero";
 import MarqueeBanner from "@/components/MarqueeBanner";
