@@ -1,19 +1,19 @@
 import type { Battle } from "@/components/UpcomingBattles";
 
-// Server-only — KING_KALY_API_KEY must never reach the client bundle. This
-// fetch happens in a Server Component (app/page.tsx), not in the browser.
+// This feed is public/unauthenticated on King Kaly's side (see
+// apps/web/app/api/partners/[slug]/battles/route.ts) — no registrant data,
+// and the flyer images themselves are already plain public Cloudinary URLs
+// — so this fetch needs KING_KALY_API_URL but not the API key at all.
 export async function getUpcomingBattles(): Promise<Battle[]> {
   const apiUrl = process.env.KING_KALY_API_URL;
-  const apiKey = process.env.KING_KALY_API_KEY;
 
-  if (!apiUrl || !apiKey) {
-    console.error("[KING_KALY_API] KING_KALY_API_URL / KING_KALY_API_KEY not configured");
+  if (!apiUrl) {
+    console.error("[KING_KALY_API] KING_KALY_API_URL not configured");
     return [];
   }
 
   try {
     const res = await fetch(`${apiUrl}/api/partners/brittany-dillard/battles`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
       // "king-kaly-battles" tag lets King Kaly's admin push an immediate
       // update via /api/revalidate the moment a selection, flyer, or
       // removal changes something here — the 60s revalidate is just a
