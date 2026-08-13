@@ -125,6 +125,30 @@ export default function BattleRegistrationModal({ open, onClose }: { open: boole
         setStatus("error");
       })
       .finally(() => setSubmitting(false));
+
+    // Additive: also feeds this applicant into King Kaly's own admin
+    // dashboard (see app/api/register-partner-battle/route.ts) so his team
+    // can select from these applicants for a partner battle too. Entirely
+    // independent of the Sheets webhook above — its success/failure never
+    // touches `status`/`errorMsg`, so it can't affect what the applicant sees.
+    fetch("/api/register-partner-battle", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: data.name.trim(),
+        tiktokUsername: data.tiktok.trim(),
+        willReachTarget: data.coinsTarget,
+        followers: data.followers.trim(),
+        official: data.official,
+        country: data.country.trim(),
+        league: data.league,
+        giftingLevel: data.giftingLevel.trim(),
+        highestCoins: data.highestCoins.trim(),
+        contactMethod: data.contactPref,
+        email: data.email.trim(),
+        whatsapp: data.whatsapp.trim(),
+      }),
+    }).catch(() => {});
   };
 
   return (
