@@ -2,6 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import { parseFollowerCount } from "@/lib/followers";
+
+// Same ceiling King Kaly's own registration form enforces
+// (packages/lib/src/giftingLevel.ts's MAX_PLAUSIBLE_LEVEL) — kept in sync
+// by hand since this repo can't import that shared package.
+const MAX_PLAUSIBLE_LEVEL = 100;
 
 // Preserved exactly from the original site — posts to Brittany's existing
 // Google Apps Script webhook (reads e.postData.contents, emails + saves to a
@@ -82,6 +88,14 @@ export default function BattleRegistrationModal({ open, onClose }: { open: boole
     });
   };
 
+  // Same checks King Kaly's own registration form runs client-side, so a
+  // Brittany-sourced applicant that lands in his admin has the same
+  // reliably-parseable followers/gifting-level data a native one would.
+  const followersParsed = parseFollowerCount(data.followers);
+  const giftingLevelValid =
+    data.giftingLevel.trim() === "" ||
+    Number(data.giftingLevel.trim()) <= MAX_PLAUSIBLE_LEVEL;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -89,6 +103,8 @@ export default function BattleRegistrationModal({ open, onClose }: { open: boole
     (Object.keys(data) as (keyof FormState)[]).forEach((key) => {
       if (!data[key].trim()) missing.add(key);
     });
+    if (data.followers.trim() && followersParsed === null) missing.add("followers");
+    if (data.giftingLevel.trim() && !giftingLevelValid) missing.add("giftingLevel");
     if (missing.size > 0) {
       setErrors(missing);
       return;
@@ -184,7 +200,7 @@ export default function BattleRegistrationModal({ open, onClose }: { open: boole
 
               <div className="bm-field">
                 <label className="bm-label" htmlFor="bm-tiktok">Your TikTok Username <span className="req">*</span></label>
-                <input className="bm-input" type="text" id="bm-tiktok" value={data.tiktok} onChange={(e) => set("tiktok")(e.target.value)} placeholder="@username" style={errors.has("tiktok") ? { borderColor: "#ec4899" } : undefined} />
+                <input className="bm-input" type="text" id="bm-tiktok" value={data.tiktok} onChange={(e) => set("tiktok")(e.target.value.replace(/^@+/, ""))} placeholder="@username" style={errors.has("tiktok") ? { borderColor: "#ec4899" } : undefined} />
               </div>
 
               <hr className="bm-divider" />
@@ -203,7 +219,14 @@ export default function BattleRegistrationModal({ open, onClose }: { open: boole
 
               <div className="bm-field">
                 <label className="bm-label" htmlFor="bm-followers">How many followers do you have? <span className="req">*</span></label>
-                <input className="bm-input" type="text" id="bm-followers" value={data.followers} onChange={(e) => set("followers")(e.target.value)} placeholder="Enter your answer" style={errors.has("followers") ? { borderColor: "#ec4899" } : undefined} />
+                <input className="bm-input" type="text" id="bm-followers" value={data.followers} onChange={(e) => set("followers")(e.target.value)} placeholder="e.g. 5000 or 5k" style={errors.has("followers") ? { borderColor: "#ec4899" } : undefined} />
+                {data.followers.trim() !== "" && (
+                  <p style={{ marginTop: "0.5rem", fontSize: "13px", color: followersParsed !== null ? "rgba(255,255,255,0.4)" : "var(--pink)" }}>
+                    {followersParsed !== null
+                      ? `≈ ${followersParsed.toLocaleString()} followers`
+                      : "We couldn't find a number in that — please include one, e.g. 5000 or 5k."}
+                  </p>
+                )}
               </div>
 
               <hr className="bm-divider" />
@@ -241,7 +264,22 @@ export default function BattleRegistrationModal({ open, onClose }: { open: boole
 
               <div className="bm-field">
                 <label className="bm-label" htmlFor="bm-gift-level">What&apos;s your Gifting level? <span className="req">*</span></label>
-                <input className="bm-input" type="text" id="bm-gift-level" value={data.giftingLevel} onChange={(e) => set("giftingLevel")(e.target.value)} placeholder="Enter your answer" style={errors.has("giftingLevel") ? { borderColor: "#ec4899" } : undefined} />
+                <input
+                  className="bm-input"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  id="bm-gift-level"
+                  value={data.giftingLevel}
+                  onChange={(e) => set("giftingLevel")(e.target.value.replace(/\D/g, "").slice(0, 3))}
+                  placeholder="e.g. 19"
+                  style={errors.has("giftingLevel") ? { borderColor: "#ec4899" } : undefined}
+                />
+                {data.giftingLevel.trim() !== "" && !giftingLevelValid && (
+                  <p style={{ marginTop: "0.5rem", fontSize: "13px", color: "var(--pink)" }}>
+                    {`Must be ${MAX_PLAUSIBLE_LEVEL} or less.`}
+                  </p>
+                )}
               </div>
 
               <div className="bm-field">
