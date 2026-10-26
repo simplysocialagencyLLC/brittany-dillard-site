@@ -9,6 +9,10 @@ import { parseFollowerCount } from "@/lib/followers";
 // by hand since this repo can't import that shared package.
 const MAX_PLAUSIBLE_LEVEL = 100;
 
+// Matches King Kaly's /api/upload-screenshot limit, checked here first so
+// an oversized photo fails instantly instead of after a slow upload.
+const MAX_SCREENSHOT_SIZE = 5 * 1024 * 1024;
+
 // Preserved exactly from the original site — posts to Brittany's existing
 // Google Apps Script webhook (reads e.postData.contents, emails + saves to a
 // Sheet), completely separate from King Kaly's own registration system.
@@ -45,6 +49,10 @@ const EMPTY: FormState = {
 export default function BattleRegistrationModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [data, setData] = useState<FormState>(EMPTY);
   const [fileName, setFileName] = useState("");
+  const [screenshotUrl, setScreenshotUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [screenshotMissing, setScreenshotMissing] = useState(false);
   const [errors, setErrors] = useState<Set<keyof FormState>>(new Set());
   const [status, setStatus] = useState<"form" | "success" | "error">("form");
   const [errorMsg, setErrorMsg] = useState("");
@@ -60,6 +68,10 @@ export default function BattleRegistrationModal({ open, onClose }: { open: boole
     if (open) {
       setData(EMPTY);
       setFileName("");
+      setScreenshotUrl("");
+      setUploading(false);
+      setUploadError("");
+      setScreenshotMissing(false);
       setErrors(new Set());
       setStatus("form");
     }
@@ -96,8 +108,38 @@ export default function BattleRegistrationModal({ open, onClose }: { open: boole
     data.giftingLevel.trim() === "" ||
     Number(data.giftingLevel.trim()) <= MAX_PLAUSIBLE_LEVEL;
 
+  // Uploads as soon as a file is picked (same as King Kaly's own form), so
+  // the URL is ready by the time the applicant hits Submit.
+  const handleScreenshot = async (file: File | undefined) => {
+    setScreenshotUrl("");
+    setUploadError("");
+    setFileName(file?.name ?? "");
+    if (!file) return;
+    setScreenshotMissing(false);
+
+    if (file.size > MAX_SCREENSHOT_SIZE) {
+      setUploadError("File too large. Maximum size is 5 MB.");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const res = await fetch("/api/upload-screenshot", { method: "POST", body });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.url) throw new Error(json.error || "Upload failed. Please try again.");
+      setScreenshotUrl(json.url);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed. Please try again.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (uploading) return;
 
     const missing = new Set<keyof FormState>();
     (Object.keys(data) as (keyof FormState)[]).forEach((key) => {
@@ -105,7 +147,9 @@ export default function BattleRegistrationModal({ open, onClose }: { open: boole
     });
     if (data.followers.trim() && followersParsed === null) missing.add("followers");
     if (data.giftingLevel.trim() && !giftingLevelValid) missing.add("giftingLevel");
-    if (missing.size > 0) {
+    const noScreenshot = !screenshotUrl;
+    setScreenshotMissing(noScreenshot);
+    if (missing.size > 0 || noScreenshot) {
       setErrors(missing);
       return;
     }
@@ -125,6 +169,7 @@ export default function BattleRegistrationModal({ open, onClose }: { open: boole
       email: data.email.trim(),
       whatsapp: data.whatsapp.trim(),
       screenshot_filename: fileName,
+      screenshot_url: screenshotUrl,
     };
 
     fetch(WEBHOOK_URL, {
@@ -159,6 +204,7 @@ export default function BattleRegistrationModal({ open, onClose }: { open: boole
         country: data.country.trim(),
         league: data.league,
         giftingLevel: data.giftingLevel.trim(),
+        giftingLevelScreenshot: screenshotUrl,
         highestCoins: data.highestCoins.trim(),
         contactMethod: data.contactPref,
         email: data.email.trim(),
@@ -286,11 +332,19 @@ export default function BattleRegistrationModal({ open, onClose }: { open: boole
                 <label className="bm-label">Attach a screenshot of your Gifting Level <span className="req">*</span></label>
                 <span className="bm-sample-label">Sample screenshot:</span>
                 <Image className="bm-sample-img" src="/gifting-screenshot-sample.jpeg" alt="Sample gifting level screenshot" width={240} height={228} />
-                <label className="bm-file-wrap" htmlFor="bm-gift-screenshot">
-                  <span className="bm-file-btn">Choose File</span>
+                <label className="bm-file-wrap" htmlFor="bm-gift-screenshot" style={screenshotMissing || uploadError ? { borderColor: "#ec4899" } : undefined}>
+                  <span className="bm-file-btn">{uploading ? "Uploading..." : screenshotUrl ? "Change File" : "Choose File"}</span>
                   <span className="bm-file-name" style={fileName ? { color: "rgba(255,255,255,0.8)" } : undefined}>{fileName || "Select your image"}</span>
-                  <input type="file" id="bm-gift-screenshot" accept="image/*" onChange={(e) => setFileName(e.target.files?.[0]?.name ?? "")} />
+                  <input type="file" id="bm-gift-screenshot" accept="image/*" disabled={uploading} onChange={(e) => handleScreenshot(e.target.files?.[0])} />
                 </label>
+                {screenshotUrl && !uploading && (
+                  <p style={{ marginTop: "0.5rem", fontSize: "13px", color: "rgba(255,255,255,0.4)" }}>Screenshot uploaded ✓</p>
+                )}
+                {(uploadError || (screenshotMissing && !uploading)) && (
+                  <p style={{ marginTop: "0.5rem", fontSize: "13px", color: "var(--pink)" }}>
+                    {uploadError || "Please attach a screenshot of your gifting level."}
+                  </p>
+                )}
               </div>
 
               <div className="bm-field">
@@ -322,8 +376,8 @@ export default function BattleRegistrationModal({ open, onClose }: { open: boole
                 <input className="bm-input" type="tel" id="bm-whatsapp" value={data.whatsapp} onChange={(e) => set("whatsapp")(e.target.value)} placeholder="+234..." style={errors.has("whatsapp") ? { borderColor: "#ec4899" } : undefined} />
               </div>
 
-              <button type="submit" className="bm-submit" disabled={submitting}>
-                {submitting ? "Submitting..." : "Submit Registration"}
+              <button type="submit" className="bm-submit" disabled={submitting || uploading}>
+                {submitting ? "Submitting..." : uploading ? "Uploading screenshot..." : "Submit Registration"}
               </button>
             </form>
           </div>
